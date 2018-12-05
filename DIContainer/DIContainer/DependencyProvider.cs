@@ -9,8 +9,7 @@ namespace DIContainer
 	public class DependencyProvider
 	{
 		private DependencyValidator validator;
-		private List<KeyValuePair<Type, Type>> pairs;
-		private List<KeyValuePair<Type, Type>> singletonPairs;
+		private List<Dependency> pairs;
 		private Dictionary<KeyValuePair<Type, Type>, object> singletonResults;
 		private readonly object locker;
 
@@ -18,8 +17,7 @@ namespace DIContainer
 		{
 			locker = new object();
 			singletonResults = new Dictionary<KeyValuePair<Type, Type>, object>();
-			pairs = new List<KeyValuePair<Type, Type>>(config.Pairs);
-			singletonPairs = new List<KeyValuePair<Type, Type>>(config.SingletonPairs);
+			pairs = new List<Dependency>(config.Pairs);
 			validator = new DependencyValidator();
 			if (!validator.Validate(config))
 				throw new ArgumentException("Wrong configuration");
@@ -28,11 +26,11 @@ namespace DIContainer
 		public T Resolve<T>()
 			where T : class
 		{
-			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
+			foreach (Dependency dependency in pairs)
 			{
-				if (pair.Key == typeof(T))
+				if (dependency.pair.Key == typeof(T))
 				{
-					return (T)Generate(pair);
+					return (T)Generate(dependency);
 				}
 			}
 			return null;
@@ -43,38 +41,38 @@ namespace DIContainer
 			where T : class
 		{
 			List<T> result = new List<T>();
-			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
+			foreach (Dependency dependency in pairs)
 			{
-				if (pair.Key == typeof(T))
+				if (dependency.pair.Key == typeof(T))
 				{
-					result.Add((T)Generate(pair));
+					result.Add((T)Generate(dependency));
 				}
 			}
 
 			return result;
 		}
 
-		private object Generate(KeyValuePair<Type, Type> currPair)
+		private object Generate(Dependency dependency)
 		{
-			if (pairs.Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+			if (pairs.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value) && !dependency.isSingleton)
 			{
-				return Create(currPair);
+				return Create(dependency.pair);
 
 			}
-			else if (singletonPairs.Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+			else if (pairs.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value) && dependency.isSingleton)
 			{
 				object result;
 
 				lock (locker)
 				{
-					if (singletonResults.Keys.ToList().Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+					if (singletonResults.Keys.ToList().Exists(x => x.Key == dependency.pair.Key && x.Value == dependency.pair.Value))
 					{
-						singletonResults.TryGetValue(currPair, out result);
+						singletonResults.TryGetValue(dependency.pair, out result);
 					}
 					else
 					{
-						result = Create(currPair);
-						singletonResults.Add(currPair, result);
+						result = Create(dependency.pair);
+						singletonResults.Add(dependency.pair, result);
 					}
 				}
 
@@ -85,8 +83,6 @@ namespace DIContainer
 
 		private object Create(KeyValuePair<Type, Type> currPair)
 		{
-			
-			
 			object result = null;
 			Type typeForCreate = GetCreateType(currPair.Value) ?? currPair.Value;
 			if (typeForCreate == null)
@@ -102,12 +98,13 @@ namespace DIContainer
 			
 			return result;
 		}
+
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
+			foreach (Dependency dependency in pairs)
 			{
-				if (pair.Key == type)
-					return pair.Value != type ? GetCreateType(pair.Value, false) : pair.Value;
+				if (dependency.pair.Key == type)
+					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
 			}
 
 			return isFirst ? null : type;

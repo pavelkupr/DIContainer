@@ -10,7 +10,7 @@ namespace DIContainer
 	class DependencyValidator
 	{
 
-		private IEnumerable<KeyValuePair<Type, Type>> pairs;
+		private IEnumerable<Dependency> pairs;
 
 		internal DependencyValidator()
 		{
@@ -18,14 +18,14 @@ namespace DIContainer
 
 		internal bool Validate(DependenciesConfiguration config)
 		{
-			pairs = config.Pairs.Concat(config.SingletonPairs);
-			foreach(KeyValuePair<Type,Type> pair in pairs)
+			pairs = config.Pairs.Concat(config.Pairs);
+			foreach(Dependency dependency in pairs)
 			{
-				if (pair.Key != pair.Value && !pair.Key.IsAssignableFrom(pair.Value))
+				if (dependency.pair.Key != dependency.pair.Value && !dependency.pair.Key.IsAssignableFrom(dependency.pair.Value))
 					return false;
 
 				bool fl = false;
-				Type typeForCreate = GetCreateType(pair.Value) ?? pair.Value;
+				Type typeForCreate = GetCreateType(dependency.pair.Value) ?? dependency.pair.Value;
 				List<Type> bannedTypes = new List<Type>();
 				bannedTypes.Add(typeForCreate); 
 				foreach (ConstructorInfo constructorInfo in typeForCreate.GetConstructors())
@@ -44,10 +44,10 @@ namespace DIContainer
 
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (KeyValuePair<Type, Type> pair in pairs)
+			foreach (Dependency dependency in pairs)
 			{
-				if (pair.Key == type)
-					return pair.Value != type ? GetCreateType(pair.Value, false) : pair.Value;
+				if (dependency.pair.Key == type)
+					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
 			}
 
 			return isFirst ? null : type;

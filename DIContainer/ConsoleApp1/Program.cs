@@ -8,6 +8,7 @@ namespace ConsoleApp1
 {
 	interface A { }
 	class B : A { public B(C c) { } }
+	class G : A { }
 	class C { }
 	class D : C { }
 	class Program
@@ -16,9 +17,10 @@ namespace ConsoleApp1
 		{
 			DependenciesConfiguration config = new DependenciesConfiguration();
 			config.Registrate<A, B>();
+			config.Registrate<A, G>();
 			config.Registrate<C, D>();
 			DependencyProvider p = new DependencyProvider(config);
-			A i = p.Resolve<A>();
+			List<A> i = (List<A>)p.ResolveAll<A>();
 			Console.Read();
 		}
 	}
