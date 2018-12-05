@@ -33,7 +33,7 @@ namespace DIContainer
 			{
 				if (dependency.pair.Key == typeof(T))
 				{
-					return (T)Generate(GetCreateType(dependency.pair.Value) ?? dependency.pair.Value, dependency);
+					return (T)Generate(GetLastType(dependency.pair.Value) ?? dependency.pair.Value, dependency);
 				}
 			}
 
@@ -45,7 +45,7 @@ namespace DIContainer
 					{
 						try
 						{
-							Type generic = (GetCreateType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
+							Type generic = (GetLastType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
 							return (T)Generate(generic, 
 								new Dependency(new KeyValuePair<Type, Type>(typeof(T), dependency.pair.Value.MakeGenericType(typeof(T).GenericTypeArguments)), 
 								dependency.isSingleton));
@@ -73,7 +73,7 @@ namespace DIContainer
 			{
 				if (dependency.pair.Key == typeof(T))
 				{
-					result.Add((T)Generate(GetCreateType(dependency.pair.Value) ?? dependency.pair.Value, dependency));
+					result.Add((T)Generate(GetLastType(dependency.pair.Value) ?? dependency.pair.Value, dependency));
 				}
 			}
 
@@ -85,7 +85,7 @@ namespace DIContainer
 					{
 						try
 						{
-							Type generic = (GetCreateType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
+							Type generic = (GetLastType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
 							result.Add((T)Generate(generic,
 								new Dependency(new KeyValuePair<Type, Type>(typeof(T), dependency.pair.Value.MakeGenericType(typeof(T).GenericTypeArguments)),
 								dependency.isSingleton)));
@@ -144,12 +144,12 @@ namespace DIContainer
 			return result;
 		}
 
-		private Type GetCreateType(Type type, bool isFirst = true)
+		private Type GetLastType(Type type, bool isFirst = true)
 		{
 			foreach (Dependency dependency in dependencies)
 			{
 				if (dependency.pair.Key == type)
-					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
+					return dependency.pair.Value != type ? GetLastType(dependency.pair.Value, false) : dependency.pair.Value;
 			}
 
 			return isFirst ? null : type;
@@ -164,13 +164,13 @@ namespace DIContainer
 			{
 				object result = null;
 				List<Type> curr;
-				Type type = GetCreateType(parameterInfo.ParameterType);
+				Type type = GetLastType(parameterInfo.ParameterType);
 				Type[] genericArgs = null;
 
 				if (type == null && parameterInfo.ParameterType.IsGenericType)
 				{
 					genericArgs = parameterInfo.ParameterType.GenericTypeArguments;
-					type = GetCreateType(parameterInfo.ParameterType.GetGenericTypeDefinition());
+					type = GetLastType(parameterInfo.ParameterType.GetGenericTypeDefinition());
 				}
 
 				if (type == null || bannedTypes.Contains(type))
@@ -196,6 +196,10 @@ namespace DIContainer
 					if (result != null)
 						break;
 				}
+
+				if (result == null)
+					return null;
+
 				parameters[i] = result;
 				i++;
 			}

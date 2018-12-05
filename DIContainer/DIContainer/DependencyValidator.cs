@@ -28,7 +28,9 @@ namespace DIContainer
 				}
 				else if (dependency.pair.Key != dependency.pair.Value && !dependency.pair.Key.IsAssignableFrom(dependency.pair.Value))
 					return false;
-				
+
+				if (dependency.pair.Value.IsAbstract)
+					return false;
 			}
 
 			foreach (Dependency dependency in dependencies)
@@ -61,7 +63,7 @@ namespace DIContainer
 				if (dependency.pair.Key == type)
 					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
 			}
-
+			
 			return isFirst ? null : type;
 		}
 
@@ -105,6 +107,9 @@ namespace DIContainer
 					if (fl)
 						break;
 				}
+
+				if (!fl)
+					return false;
 			}
 
 			return true;
