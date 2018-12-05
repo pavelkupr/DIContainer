@@ -9,13 +9,17 @@ namespace DIContainer
 	public class DependencyProvider
 	{
 		private DependencyValidator validator;
-		private Dictionary<Type, Type> pairs;
-		private List<Type> singleton;
+		private List<KeyValuePair<Type, Type>> pairs;
+		private List<KeyValuePair<Type, Type>> singletonPairs;
+		private Dictionary<KeyValuePair<Type, Type>, object> singletonResults;
+		private readonly object locker;
 
 		public DependencyProvider(DependenciesConfiguration config)
 		{
-			pairs = new Dictionary<Type, Type>(config.Pairs);
-			singleton = new List<Type>(config.Singleton);
+			locker = new object();
+			singletonResults = new Dictionary<KeyValuePair<Type, Type>, object>();
+			pairs = new List<KeyValuePair<Type, Type>>(config.Pairs);
+			singletonPairs = new List<KeyValuePair<Type, Type>>(config.SingletonPairs);
 			validator = new DependencyValidator();
 			if (!validator.Validate(config))
 				throw new ArgumentException("Wrong configuration");
@@ -24,24 +28,67 @@ namespace DIContainer
 		public T Resolve<T>()
 			where T : class
 		{
-			object result;
-			if (!singleton.Contains(typeof(T)))
+			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
 			{
-				result = Create(typeof(T));
-				if (result == null)
-					throw new ArgumentException();
-				else
-					return (T)result;
+				if (pair.Key == typeof(T))
+				{
+					return (T)Generate(pair);
+				}
+			}
+			return null;
+			
+		}
+
+		public IEnumerable<T> ResolveAll<T>()
+			where T : class
+		{
+			List<T> result = new List<T>();
+			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
+			{
+				if (pair.Key == typeof(T))
+				{
+					result.Add((T)Generate(pair));
+				}
+			}
+
+			return result;
+		}
+
+		private object Generate(KeyValuePair<Type, Type> currPair)
+		{
+			if (pairs.Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+			{
+				return Create(currPair);
+
+			}
+			else if (singletonPairs.Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+			{
+				object result;
+
+				lock (locker)
+				{
+					if (singletonResults.Keys.ToList().Exists(x => x.Key == currPair.Key && x.Value == currPair.Value))
+					{
+						singletonResults.TryGetValue(currPair, out result);
+					}
+					else
+					{
+						result = Create(currPair);
+						singletonResults.Add(currPair, result);
+					}
+				}
+
+				return result;
 			}
 			return null;
 		}
 
-		private object Create(Type type)
+		private object Create(KeyValuePair<Type, Type> currPair)
 		{
 			
 			
 			object result = null;
-			Type typeForCreate = GetCreateType(type);
+			Type typeForCreate = GetCreateType(currPair.Value) ?? currPair.Value;
 			if (typeForCreate == null)
 				return null;
 			List<Type> bannedTypes = new List<Type>();
@@ -57,7 +104,7 @@ namespace DIContainer
 		}
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (KeyValuePair<Type, Type> pair in pairs)
+			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
 			{
 				if (pair.Key == type)
 					return pair.Value != type ? GetCreateType(pair.Value, false) : pair.Value;

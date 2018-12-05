@@ -18,7 +18,7 @@ namespace DIContainer
 
 		internal bool Validate(DependenciesConfiguration config)
 		{
-			pairs = config.Pairs;
+			pairs = config.Pairs.Concat(config.SingletonPairs);
 			foreach(KeyValuePair<Type,Type> pair in pairs)
 			{
 				if (pair.Key != pair.Value && !pair.Key.IsAssignableFrom(pair.Value))
