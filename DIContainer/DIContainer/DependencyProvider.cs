@@ -9,7 +9,7 @@ namespace DIContainer
 	public class DependencyProvider
 	{
 		private DependencyValidator validator;
-		private List<Dependency> pairs;
+		private List<Dependency> dependencies;
 		private Dictionary<KeyValuePair<Type, Type>, object> singletonResults;
 		private readonly object locker;
 
@@ -17,7 +17,7 @@ namespace DIContainer
 		{
 			locker = new object();
 			singletonResults = new Dictionary<KeyValuePair<Type, Type>, object>();
-			pairs = new List<Dependency>(config.Pairs);
+			dependencies = new List<Dependency>(config.Dependencies);
 			validator = new DependencyValidator();
 			if (!validator.Validate(config))
 				throw new ArgumentException("Wrong configuration");
@@ -26,13 +26,38 @@ namespace DIContainer
 		public T Resolve<T>()
 			where T : class
 		{
-			foreach (Dependency dependency in pairs)
+			if (typeof(T).IsGenericTypeDefinition)
+				return null;
+
+			foreach (Dependency dependency in dependencies)
 			{
 				if (dependency.pair.Key == typeof(T))
 				{
-					return (T)Generate(dependency);
+					return (T)Generate(GetCreateType(dependency.pair.Value) ?? dependency.pair.Value, dependency);
 				}
 			}
+
+			if (typeof(T).IsGenericType)
+			{
+				foreach (Dependency dependency in dependencies)
+				{
+					if (dependency.pair.Key == typeof(T).GetGenericTypeDefinition())
+					{
+						try
+						{
+							Type generic = (GetCreateType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
+							return (T)Generate(generic, 
+								new Dependency(new KeyValuePair<Type, Type>(typeof(T), dependency.pair.Value.MakeGenericType(typeof(T).GenericTypeArguments)), 
+								dependency.isSingleton));
+						}
+						catch
+						{
+							return null;
+						}
+					}
+				}
+			}
+
 			return null;
 			
 		}
@@ -40,26 +65,49 @@ namespace DIContainer
 		public IEnumerable<T> ResolveAll<T>()
 			where T : class
 		{
+			if (typeof(T).IsGenericTypeDefinition)
+				return null;
+
 			List<T> result = new List<T>();
-			foreach (Dependency dependency in pairs)
+			foreach (Dependency dependency in dependencies)
 			{
 				if (dependency.pair.Key == typeof(T))
 				{
-					result.Add((T)Generate(dependency));
+					result.Add((T)Generate(GetCreateType(dependency.pair.Value) ?? dependency.pair.Value, dependency));
+				}
+			}
+
+			if (typeof(T).IsGenericType)
+			{
+				foreach (Dependency dependency in dependencies)
+				{
+					if (dependency.pair.Key == typeof(T).GetGenericTypeDefinition())
+					{
+						try
+						{
+							Type generic = (GetCreateType(dependency.pair.Value) ?? dependency.pair.Value).MakeGenericType(typeof(T).GenericTypeArguments);
+							result.Add((T)Generate(generic,
+								new Dependency(new KeyValuePair<Type, Type>(typeof(T), dependency.pair.Value.MakeGenericType(typeof(T).GenericTypeArguments)),
+								dependency.isSingleton)));
+						}
+						catch
+						{
+							return null;
+						}
+					}
 				}
 			}
 
 			return result;
 		}
 
-		private object Generate(Dependency dependency)
+		private object Generate(Type typeForGeneration, Dependency dependency)
 		{
-			if (pairs.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value) && !dependency.isSingleton)
+			if (!dependency.isSingleton)
 			{
-				return Create(dependency.pair);
-
+				return Create(typeForGeneration);
 			}
-			else if (pairs.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value) && dependency.isSingleton)
+			else if (dependency.isSingleton)
 			{
 				object result;
 
@@ -71,7 +119,7 @@ namespace DIContainer
 					}
 					else
 					{
-						result = Create(dependency.pair);
+						result = Create(typeForGeneration);
 						singletonResults.Add(dependency.pair, result);
 					}
 				}
@@ -81,15 +129,12 @@ namespace DIContainer
 			return null;
 		}
 
-		private object Create(KeyValuePair<Type, Type> currPair)
+		private object Create(Type typeForCreation)
 		{
 			object result = null;
-			Type typeForCreate = GetCreateType(currPair.Value) ?? currPair.Value;
-			if (typeForCreate == null)
-				return null;
 			List<Type> bannedTypes = new List<Type>();
-			bannedTypes.Add(typeForCreate);
-			foreach (ConstructorInfo constructorInfo in typeForCreate.GetConstructors())
+			bannedTypes.Add(typeForCreation);
+			foreach (ConstructorInfo constructorInfo in typeForCreation.GetConstructors())
 			{
 				result = CallConstructor(constructorInfo, bannedTypes);
 				if (result != null)
@@ -101,7 +146,7 @@ namespace DIContainer
 
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (Dependency dependency in pairs)
+			foreach (Dependency dependency in dependencies)
 			{
 				if (dependency.pair.Key == type)
 					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
@@ -120,9 +165,28 @@ namespace DIContainer
 				object result = null;
 				List<Type> curr;
 				Type type = GetCreateType(parameterInfo.ParameterType);
+				Type[] genericArgs = null;
+
+				if (type == null && parameterInfo.ParameterType.IsGenericType)
+				{
+					genericArgs = parameterInfo.ParameterType.GenericTypeArguments;
+					type = GetCreateType(parameterInfo.ParameterType.GetGenericTypeDefinition());
+				}
 
 				if (type == null || bannedTypes.Contains(type))
 					return null;
+
+				if (type.IsGenericTypeDefinition)
+				{
+					try
+					{
+						type = type.MakeGenericType(genericArgs);
+					}
+					catch
+					{
+						return null;
+					}
+				}
 
 				foreach (ConstructorInfo constructorInfo in type.GetConstructors())
 				{

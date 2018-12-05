@@ -10,7 +10,7 @@ namespace DIContainer
 	class DependencyValidator
 	{
 
-		private IEnumerable<Dependency> pairs;
+		private IEnumerable<Dependency> dependencies;
 
 		internal DependencyValidator()
 		{
@@ -18,25 +18,37 @@ namespace DIContainer
 
 		internal bool Validate(DependenciesConfiguration config)
 		{
-			pairs = config.Pairs.Concat(config.Pairs);
-			foreach(Dependency dependency in pairs)
+			dependencies = config.Dependencies;
+			foreach (Dependency dependency in dependencies)
 			{
-				if (dependency.pair.Key != dependency.pair.Value && !dependency.pair.Key.IsAssignableFrom(dependency.pair.Value))
-					return false;
-
-				bool fl = false;
-				Type typeForCreate = GetCreateType(dependency.pair.Value) ?? dependency.pair.Value;
-				List<Type> bannedTypes = new List<Type>();
-				bannedTypes.Add(typeForCreate); 
-				foreach (ConstructorInfo constructorInfo in typeForCreate.GetConstructors())
+				if (dependency.pair.Key.IsGenericTypeDefinition)
 				{
-					fl = CheckConstructor(constructorInfo, bannedTypes);
-					if (fl)
-						break;
+					if (!dependency.pair.Value.IsGenericTypeDefinition)
+						return false;
 				}
-
-				if (!fl)
+				else if (dependency.pair.Key != dependency.pair.Value && !dependency.pair.Key.IsAssignableFrom(dependency.pair.Value))
 					return false;
+				
+			}
+
+			foreach (Dependency dependency in dependencies)
+			{
+				if (!dependency.pair.Key.IsGenericTypeDefinition)
+				{
+					bool fl = false;
+					Type typeForCreate = GetCreateType(dependency.pair.Value) ?? dependency.pair.Value;
+					List<Type> bannedTypes = new List<Type>();
+					bannedTypes.Add(typeForCreate);
+					foreach (ConstructorInfo constructorInfo in typeForCreate.GetConstructors())
+					{
+						fl = CheckConstructor(constructorInfo, bannedTypes);
+						if (fl)
+							break;
+					}
+
+					if (!fl)
+						return false;
+				}
 			}
 			
 			return true;
@@ -44,7 +56,7 @@ namespace DIContainer
 
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (Dependency dependency in pairs)
+			foreach (Dependency dependency in dependencies)
 			{
 				if (dependency.pair.Key == type)
 					return dependency.pair.Value != type ? GetCreateType(dependency.pair.Value, false) : dependency.pair.Value;
@@ -60,10 +72,31 @@ namespace DIContainer
 				bool fl = false;
 				List<Type> curr;
 				Type type = GetCreateType(parameterInfo.ParameterType);
+				Type[] genericArgs = null;
+
+				if (type == null && parameterInfo.ParameterType.IsGenericType)
+				{
+					genericArgs = parameterInfo.ParameterType.GenericTypeArguments;
+					type = GetCreateType(parameterInfo.ParameterType.GetGenericTypeDefinition());
+				}
 
 				if (type == null || bannedTypes.Contains(type))
 					return false;
-		
+
+				if (type.IsGenericTypeDefinition)
+				{
+					try
+					{
+						type = type.MakeGenericType(genericArgs);
+					}
+					catch
+					{
+						return false;
+					}
+					
+				}
+
+
 				foreach (ConstructorInfo constructorInfo in type.GetConstructors())
 				{
 					curr = new List<Type>(bannedTypes);

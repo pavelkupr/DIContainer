@@ -20,11 +20,11 @@ namespace DIContainer
 
     public class DependenciesConfiguration
     {
-		internal List<Dependency> Pairs { get; }
+		internal List<Dependency> Dependencies { get; }
 
 		public DependenciesConfiguration()
 		{
-			Pairs = new List<Dependency>();
+			Dependencies = new List<Dependency>();
 		}
 
 		public void Registrate<T1, T2>()
@@ -32,8 +32,8 @@ namespace DIContainer
 			where T2 : class
 		{
 			Dependency dependency = new Dependency(new KeyValuePair<Type, Type>(typeof(T1), typeof(T2)), false);
-			if (!Pairs.Exists(x=> x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
-				Pairs.Add(dependency);
+			if (!Dependencies.Exists(x=> x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
+				Dependencies.Add(dependency);
 		}
 
 		public void RegistrateAsSingleton<T1, T2>()
@@ -41,8 +41,28 @@ namespace DIContainer
 			where T2 : class
 		{
 			Dependency dependency = new Dependency(new KeyValuePair<Type, Type>(typeof(T1), typeof(T2)), true);
-			if (!Pairs.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
-				Pairs.Add(dependency);
+			if (!Dependencies.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
+				Dependencies.Add(dependency);
+		}
+
+		public void Registrate(Type type1, Type type2)
+		{
+			if ((type1.IsClass || type1.IsInterface) && (type2.IsClass || type2.IsInterface))
+			{
+				Dependency dependency = new Dependency(new KeyValuePair<Type, Type>(type1, type2), false);
+				if (!Dependencies.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
+					Dependencies.Add(dependency);
+			}
+		}
+
+		public void RegistrateAsSingleton(Type type1, Type type2)
+		{
+			if ((type1.IsClass || type1.IsInterface) && (type2.IsClass || type2.IsInterface))
+			{
+				Dependency dependency = new Dependency(new KeyValuePair<Type, Type>(type1, type2), true);
+				if (!Dependencies.Exists(x => x.pair.Key == dependency.pair.Key && x.pair.Value == dependency.pair.Value))
+					Dependencies.Add(dependency);
+			}
 		}
 	}
 }
