@@ -10,12 +10,12 @@ namespace DIContainer
 	{
 		private DependencyValidator validator;
 		private Dictionary<Type, Type> pairs;
-		private Dictionary<Type, Type> singletonPairs;
+		private List<Type> singleton;
 
 		public DependencyProvider(DependenciesConfiguration config)
 		{
 			pairs = new Dictionary<Type, Type>(config.Pairs);
-			singletonPairs = new Dictionary<Type, Type>(config.SingletonPairs);
+			singleton = new List<Type>(config.Singleton);
 			validator = new DependencyValidator();
 			if (!validator.Validate(config))
 				throw new ArgumentException("Wrong configuration");
@@ -25,7 +25,7 @@ namespace DIContainer
 			where T : class
 		{
 			object result;
-			if (pairs.Keys.Contains(typeof(T)))
+			if (!singleton.Contains(typeof(T)))
 			{
 				result = Create(typeof(T));
 				if (result == null)
@@ -57,7 +57,7 @@ namespace DIContainer
 		}
 		private Type GetCreateType(Type type, bool isFirst = true)
 		{
-			foreach (KeyValuePair<Type, Type> pair in pairs.Concat(singletonPairs))
+			foreach (KeyValuePair<Type, Type> pair in pairs)
 			{
 				if (pair.Key == type)
 					return pair.Value != type ? GetCreateType(pair.Value, false) : pair.Value;

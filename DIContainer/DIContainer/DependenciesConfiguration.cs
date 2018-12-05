@@ -9,12 +9,12 @@ namespace DIContainer
     public class DependenciesConfiguration
     {
 		internal Dictionary<Type, Type> Pairs { get; }
-		internal Dictionary<Type, Type> SingletonPairs { get; }
+		internal List<Type> Singleton { get; }
 
 		public DependenciesConfiguration()
 		{
 			Pairs = new Dictionary<Type, Type>();
-			SingletonPairs = new Dictionary<Type, Type>();
+			Singleton = new List<Type>();
 		}
 
 		public void Registrate<T1, T2>()
@@ -28,7 +28,8 @@ namespace DIContainer
 			where T1 : class
 			where T2 : class
 		{
-			SingletonPairs.Add(typeof(T1), typeof(T2));
+			Pairs.Add(typeof(T1), typeof(T2));
+			Singleton.Add(typeof(T1));
 		}
 	}
 }
